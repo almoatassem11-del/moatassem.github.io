@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>IMAGE TRANSFER SYSTEM v1.0</title>
+
+<style>
+body {
+    background: #c0c0c0;
+    font-family: "Courier New", monospace;
+    margin: 0;
+}
+
+/* WINDOW */
+.window {
+    width: 720px;
+    height: 540px;
+    margin: 30px auto;
+    background: #e0e0e0;
+    border: 3px solid #000;
+    box-shadow:
+        inset -2px -2px #808080,
+        inset 2px 2px #ffffff;
+}
+
+/* TITLE BAR */
+.titlebar {
+    background: #000080;
+    color: white;
+    padding: 6px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+/* BUTTONS */
+button {
+    background: #d4d0c8;
+    border: 2px solid #ffffff;
+    border-right: 2px solid #404040;
+    border-bottom: 2px solid #404040;
+    padding: 6px 10px;
+    margin: 4px;
+    cursor: pointer;
+    font-family: "Courier New";
+}
+
+button:active {
+    border: 2px solid #404040;
+    border-right: 2px solid #ffffff;
+    border-bottom: 2px solid #ffffff;
+}
+
+/* CENTER */
+.center {
+    text-align: center;
+    padding: 10px;
+}
+
+/* PREVIEW */
+#preview {
+    width: 240px;
+    height: 140px;
+    border: 2px solid #000;
+    background: #fff;
+    display: block;
+    margin: 10px auto;
+    image-rendering: pixelated;
+}
+
+/* TEXT AREA */
+textarea {
+    width: 92%;
+    height: 150px;
+    display: block;
+    margin: auto;
+    background: #000;
+    color: #00ff00;
+    border: 2px solid #000;
+    font-family: "Courier New";
+    font-size: 12px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="window">
+
+<div class="titlebar">
+IMAGE TRANSFER SYSTEM — 1985  EDITION
+</div>
+
+<div class="center">
+
+<img id="preview">
+
+<br>
+
+<button onclick="loadImage()">LOAD IMAGE</button>
+<button onclick="encode()">ENCODE</button>
+<button onclick="decode()">DECODE</button>
+<button onclick="copyText()">COPY</button>
+<button onclick="downloadTxt()">SAVE FILE</button>
+
+</div>
+
+<textarea id="text"></textarea>
+
+</div>
+
+<script>
+
+const W = 200;
+const H = 114;
+
+let pixelData = null;
+
+// ---------------- LOAD IMAGE ----------------
+
+function loadImage(){
+    let input = document.createElement("input");
+    input.type = "file";
+
+    input.onchange = e => {
+        let file = e.target.files[0];
+        let reader = new FileReader();
+
+        reader.onload = event => {
+            let img = new Image();
+
+            img.onload = () => {
+
+                let canvas = document.createElement("canvas");
+                canvas.width = W;
+                canvas.height = H;
+
+                let ctx = canvas.getContext("2d");
+                ctx.drawImage(img,0,0,W,H);
+
+                let data = ctx.getImageData(0,0,W,H).data;
+
+                // PALETTE COMPRESSION (16 levels per channel)
+                let packed = [];
+
+                for(let i=0;i<data.length;i+=4){
+
+                    let r = Math.floor(data[i] / 64);
+                    let g = Math.floor(data[i+1] / 64);
+                    let b = Math.floor(data[i+2] / 64);
+
+                    // pack into single byte (2 bits each)
+                    let p = (r << 4) | (g << 2) | b;
+
+                    packed.push(p);
+                }
+
+                pixelData = packed;
+
+                document.getElementById("preview").src = canvas.toDataURL("image/png");
+            }
+
+            img.src = event.target.result;
+        }
+
+        reader.readAsDataURL(file);
+    }
+
+    input.click();
+}
+
+
+// ---------------- ENCODE ----------------
+
+function encode(){
+
+    if(!pixelData) return;
+
+    let binary = "";
+
+    for(let i=0;i<pixelData.length;i++){
+        binary += String.fromCharCode(pixelData[i]);
+    }
+
+    let encoded = btoa(binary);
+
+    document.getElementById("text").value = encoded;
+}
+
+
+// ---------------- DECODE ----------------
+
+function decode(){
+
+    try {
+
+        let binary = atob(document.getElementById("text").value);
+
+        let arr = new Uint8Array(binary.length);
+
+        for(let i=0;i<binary.length;i++){
+            arr[i] = binary.charCodeAt(i);
+        }
+
+        let canvas = document.createElement("canvas");
+        canvas.width = W;
+        canvas.height = H;
+
+        let ctx = canvas.getContext("2d");
+        let imgData = ctx.createImageData(W,H);
+
+        for(let i=0,j=0;i<arr.length;i++,j+=4){
+
+            let p = arr[i];
+
+            let r = (p >> 4) & 3;
+            let g = (p >> 2) & 3;
+            let b = (p >> 0) & 3;
+
+            imgData.data[j]   = r * 64;
+            imgData.data[j+1] = g * 64;
+            imgData.data[j+2] = b * 64;
+            imgData.data[j+3] = 255;
+        }
+
+        ctx.putImageData(imgData,0,0);
+
+        document.getElementById("preview").src = canvas.toDataURL("image/png");
+
+    } catch(e){
+        alert("ERROR: DATA CORRUPTED");
+    }
+}
+
+
+// ---------------- COPY ----------------
+
+function copyText(){
+    navigator.clipboard.writeText(
+        document.getElementById("text").value
+    );
+}
+
+
+// ---------------- SAVE ----------------
+
+function downloadTxt(){
+
+    let blob = new Blob(
+        [document.getElementById("text").value],
+        {type:"text/plain"}
+    );
+
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "IMAGE.DAT";
+    a.click();
+}
+
+</script>
+
+</body>
+</html>
